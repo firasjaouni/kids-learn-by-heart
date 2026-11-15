@@ -1,0 +1,9 @@
+{
+  "name": "kids-learn-by-heart",
+  "private": true,
+  "description": "Kids recite a text from memory; the app listens and reveals each word as they say it.",
+  "scripts": {
+    "test": "node tests/matcher.test.js",
+    "start": "npx --yes http-server -c-1 -p 8080 ."
+  }
+}

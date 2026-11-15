@@ -1,0 +1,10 @@
+{
+  "name": "Learn by Heart",
+  "short_name": "By Heart",
+  "description": "Kids recite from memory; the app listens and reveals each word.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fff7ea",
+  "theme_color": "#ffb84d",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

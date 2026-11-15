@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Learn by Heart</title>
+  <meta name="description" content="Kids recite a text from memory; the app listens and reveals each word as they say it.">
+  <meta name="theme-color" content="#ffb84d">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== HOME ========== -->
+  <section id="home" class="screen active">
+    <header class="topbar">
+      <h1>🧠 Learn by Heart</h1>
+      <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙️</button>
+    </header>
+
+    <div id="unsupported" class="banner" hidden>
+      This browser can't listen to speech. Please open this page in <b>Chrome</b>, <b>Edge</b> or <b>Safari</b>.
+    </div>
+
+    <ul id="text-list" class="cards"></ul>
+
+    <button class="fab" id="btn-add">＋ Add a text</button>
+  </section>
+
+  <!-- ========== EDIT ========== -->
+  <section id="edit" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="Back">←</button>
+      <h1 id="edit-heading">New text</h1>
+      <span></span>
+    </header>
+    <form id="edit-form" class="panel">
+      <label>Title
+        <input id="edit-title" required maxlength="80" placeholder="e.g. Surat Al-Ikhlas, Twinkle Twinkle…">
+      </label>
+      <label>Text to learn
+        <textarea id="edit-text" required rows="10" placeholder="Paste or type the text here. Line breaks are kept."></textarea>
+      </label>
+      <label>Language
+        <select id="edit-lang">
+          <option value="auto">Detect automatically</option>
+          <option value="en">English</option>
+          <option value="ar">العربية (Arabic)</option>
+        </select>
+      </label>
+      <div class="row">
+        <button type="button" class="btn ghost danger" id="btn-delete" hidden>🗑 Delete</button>
+        <button type="submit" class="btn primary">💾 Save</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ========== PRACTICE ========== -->
+  <section id="practice" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="Back">←</button>
+      <h1 id="practice-title"></h1>
+      <button class="icon-btn" id="btn-restart" aria-label="Start over">↺</button>
+    </header>
+
+    <div class="progress"><div id="progress-bar"></div></div>
+
+    <div id="words" class="words"></div>
+
+    <p id="heard" class="heard"></p>
+
+    <footer class="controls">
+      <button class="round-btn" id="btn-peek" aria-label="Peek at the whole text">👀<span>Peek</span></button>
+      <button class="mic" id="btn-mic" aria-label="Start listening">
+        <span class="mic-icon">🎤</span>
+        <span class="mic-label" id="mic-label">Tap &amp; recite</span>
+      </button>
+      <button class="round-btn" id="btn-hint" aria-label="Show the next word">💡<span>Hint</span></button>
+    </footer>
+  </section>
+
+  <!-- ========== RESULT ========== -->
+  <dialog id="result">
+    <div class="stars" id="result-stars"></div>
+    <h2 id="result-title">Well done!</h2>
+    <p id="result-detail"></p>
+    <div class="row">
+      <button class="btn ghost" id="btn-result-home">🏠 Home</button>
+      <button class="btn primary" id="btn-result-again">↺ Again</button>
+    </div>
+  </dialog>
+
+  <!-- ========== SETTINGS ========== -->
+  <dialog id="settings">
+    <h2>⚙️ Settings</h2>
+    <form method="dialog" class="panel flat">
+      <label>Show the next word after a pause of
+        <select id="set-delay">
+          <option value="2">2 seconds</option>
+          <option value="3">3 seconds</option>
+          <option value="4">4 seconds</option>
+          <option value="5">5 seconds</option>
+          <option value="8">8 seconds</option>
+          <option value="0">Never (only the 💡 button)</option>
+        </select>
+      </label>
+      <label>Hidden words look like
+        <select id="set-blanks">
+          <option value="shape">Blank bars (shows word length)</option>
+          <option value="dots">Small dots</option>
+          <option value="none">Nothing (fully hidden)</option>
+        </select>
+      </label>
+      <label>English accent
+        <select id="set-en">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-AU">English (Australia)</option>
+          <option value="en-IN">English (India)</option>
+        </select>
+      </label>
+      <label>Arabic dialect for listening
+        <select id="set-ar">
+          <option value="ar-SA">العربية الفصحى / Saudi Arabia</option>
+          <option value="ar-EG">Egypt</option>
+          <option value="ar-AE">UAE</option>
+          <option value="ar-JO">Jordan</option>
+          <option value="ar-MA">Morocco</option>
+          <option value="ar-TN">Tunisia</option>
+          <option value="ar-DZ">Algeria</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="set-heard"> Show what the app heard (for parents)</label>
+      <div class="row"><button class="btn primary" value="ok">Done</button></div>
+    </form>
+  </dialog>
+
+  <canvas id="confetti"></canvas>
+
+  <script src="matcher.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
