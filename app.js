@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const APP_VERSION = '9';
+  const APP_VERSION = '10';
   const $ = sel => document.querySelector(sel);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const isAndroid = /android/i.test(navigator.userAgent);
@@ -37,14 +37,18 @@
   if (!texts) { texts = SAMPLES.slice(); store.set('lbh.texts', texts); }
   const saveTexts = () => store.set('lbh.texts', texts);
 
-  const DEFAULTS = { delay: 3, follow: true, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' };
-  const settings = Object.assign({}, DEFAULTS, store.get('lbh.settings', {}));
+  const DEFAULTS = { v: 2, delay: 3, follow: true, auto: false, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' };
+  const savedSettings = store.get('lbh.settings', {});
+  const settings = Object.assign({}, DEFAULTS, savedSettings);
   settings.delay = +settings.delay;
   if (!(settings.delay >= 1 && settings.delay <= 10)) { // older "Never" setting, or bad value
     if (settings.delay === 0) settings.auto = false;
     settings.delay = DEFAULTS.delay;
   }
-  settings.auto = settings.auto !== false;
+  // v2: automatic hints are now opt-in (the countdown stressed children);
+  // switch them off once for everyone who had the old default.
+  if ((savedSettings.v || 1) < 2) { settings.auto = false; settings.v = 2; store.set('lbh.settings', settings); }
+  settings.auto = settings.auto === true;
   settings.follow = settings.follow !== false;
   const saveSettings = () => store.set('lbh.settings', settings);
 
@@ -259,7 +263,7 @@
       P.rec ? P.rec.lang : (P.text.lang === 'ar' ? settings.ar : settings.en),
       'word ' + Math.min(tr.pos + 1, tr.tokens.length) + '/' + tr.tokens.length,
       tok ? 'waiting for: “' + tok.display + '”' : 'finished',
-      'hint after ' + effectiveDelay().toFixed(1) + ' s',
+      settings.auto ? 'auto hint after ' + effectiveDelay().toFixed(1) + ' s' : 'hints: tap only',
     ].join(' · ');
     const trace = tr.explain(D.spoken);
     const byIndex = new Map(trace.map(x => [x.i, x]));
@@ -407,11 +411,9 @@
         P.lastSpokenLen = spoken.length;
       }
       P.restartFails = 0;
-      const before = P.spans[P.tracker.pos];
       const advanced = P.tracker.update(spoken);
       if (advanced > 0) {
         P.pace.progress(Date.now(), advanced);
-        if (before) before.style.removeProperty('--wait');
         P.lastProgress = Date.now();
         refresh();
       }
@@ -478,18 +480,13 @@
   }
 
   function checkPause() {
-    const cur = P.spans[P.tracker.pos];
-    if (!P.listening || !settings.auto || P.tracker.done) { if (cur) cur.style.removeProperty('--wait'); return; }
+    if (!P.listening || !settings.auto || P.tracker.done) return;
     syncSpeedLabel();
-    const f = waitFraction(Date.now());
-    if (f >= 1) giveHint('pause');
-    else if (cur) cur.style.setProperty('--wait', f.toFixed(3));
+    if (waitFraction(Date.now()) >= 1) giveHint('pause');
   }
 
   function giveHint(source) {
     if (!P.tracker) return;
-    const cur = P.spans[P.tracker.pos];
-    if (cur) cur.style.removeProperty('--wait');
     const why = source !== 'pause' ? '(' + (source || 'button') + ')' : `after ${((Date.now() - P.lastProgress) / 1000).toFixed(1)} s without progress (wait ${effectiveDelay().toFixed(1)} s)`;
     const idx = P.tracker.pos;
     if (!P.tracker.hint()) return;
@@ -530,6 +527,7 @@
   }
   function syncSpeed() {
     $('#speed').hidden = !settings.auto;
+    $('#tap-tip').hidden = settings.auto;
     $('#speed').classList.toggle('follow', settings.follow);
     $('#speed-follow').setAttribute('aria-pressed', String(settings.follow));
     $('#speed-reset').disabled = settings.delay === DEFAULTS.delay && settings.follow === DEFAULTS.follow;
@@ -592,7 +590,7 @@
   $('#btn-restart').addEventListener('click', () => { stopListening(); restart(); });
   wordsEl.addEventListener('click', e => {
     const s = e.target.closest('.w');
-    if (s && +s.dataset.i === P.tracker.pos) giveHint('tapped word');
+    if (s && s.classList.contains('hidden')) giveHint('tapped word');
   });
 
   // --- finish ---

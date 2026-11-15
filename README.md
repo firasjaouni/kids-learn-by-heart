@@ -5,15 +5,17 @@ A small web app that helps kids memorize texts (English or Arabic).
 1. A parent adds a text: a poem, a surah, a times table, anything.
 2. The child taps 🎤 and recites it from memory.
 3. The app listens. Each word **appears as the child says it** (green).
-4. If the child **pauses** (3 seconds by default), the **next word appears as a hint** (orange).
+4. If the child is **stuck**, they **tap the word** (or any blank) and it appears as a hint (orange).
+   There is no timer or countdown by default.
 5. At the end the child gets 1–3 ⭐ depending on how many words they said without hints.
 
 Other buttons:
-- 💡 **Hint**: show the next word now (tapping the highlighted blank does the same).
+- 💡 **Hint**: show the next word now (same as tapping a blank).
 - 👀 **Peek**: tap to see the whole text for 2 seconds, or hold it down to keep it showing.
 - ↺ **Start over**.
 
-Above the mic, a **🐢 ↔ 🐇 speed slider** sets how long the app waits before showing the next word.
+Optionally (⚙️ Settings → *Also show the next word automatically when my child pauses*), the app
+can show the next word by itself after a pause. A **🐢 ↔ 🐇 speed slider** then appears above the mic and sets how long the app waits before showing the next word.
 With **🎵 Follow pace** on (the default), the wait adapts to how fast your child recites: a quick
 reciter gets a hint after a short pause, a slow one gets more time. The slider then sets patience
 on top of that (🐢 more, 🐇 less). With Follow pace off, the slider is a fixed 1–10 seconds.

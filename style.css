@@ -191,7 +191,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
   transition: color .25s, background-color .25s;
   position: relative;
 }
-.w.hidden { color: transparent; background: var(--blank); user-select: none; cursor: pointer; }
+.w.hidden { color: transparent; background: var(--blank); user-select: none; -webkit-user-select: none; cursor: pointer; touch-action: manipulation; }
 .blanks-dots .w.hidden { background: none; }
 .blanks-dots .w.hidden::after {
   content: "• • •";
@@ -205,18 +205,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 .w.skipped { color: var(--skipped); animation: pop .35s ease; }
 .w.hint { color: var(--hint); background: var(--hint-bg); animation: pop .35s ease; }
 .w.current { box-shadow: 0 0 0 3px var(--primary); }
-/* "hint coming" bar: fills up under the current word during a pause */
-.w.current::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 4px;
-  bottom: 4px;
-  height: 7px;
-  width: calc((100% - 8px) * var(--wait, 0));
-  background: var(--primary);
-  border-radius: 99px;
-  transition: width .2s linear;
-}
 .listening .w.current { animation: pulse 1.2s ease-in-out infinite; }
 .peeking .w.hidden { color: var(--muted); background: transparent; }
 .blanks-none.peeking .w.hidden { display: inline-block; }
@@ -277,6 +265,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 .debug-on .words { max-height: calc(100dvh - 640px); min-height: 150px; }
 @media (prefers-color-scheme: dark) { .dbg-w.ignored { background: #4a2626; } }
 
+.tap-tip { margin: 0 0 12px; text-align: center; color: var(--muted); font-weight: 700; font-size: 1.05rem; }
 .speed {
   display: grid;
   grid-template-columns: auto 1fr auto;
