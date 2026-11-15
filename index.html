@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 
@@ -66,14 +66,33 @@
     <header class="topbar">
       <button class="icon-btn" data-back aria-label="Back">←</button>
       <h1 id="practice-title"></h1>
-      <button class="icon-btn" id="btn-restart" aria-label="Start over">↺</button>
+      <span class="topbar-right">
+        <button class="icon-btn" id="btn-debug" aria-label="Show what the app hears (debug)" aria-pressed="false">🐞</button>
+        <button class="icon-btn" id="btn-restart" aria-label="Start over">↺</button>
+      </span>
     </header>
 
     <div class="progress"><div id="progress-bar"></div></div>
 
     <div id="words" class="words"></div>
 
-    <p id="heard" class="heard"></p>
+    <div id="debug" class="debug" hidden>
+      <div class="debug-head">
+        <b>🐞 What the app hears</b>
+        <span class="debug-actions">
+          <button type="button" class="chip" id="dbg-copy">📋 Copy log</button>
+          <button type="button" class="chip" id="dbg-share" hidden>📤 Send log</button>
+        </span>
+      </div>
+      <p id="dbg-status" class="dbg-status"></p>
+      <div id="dbg-words" class="dbg-words"></div>
+      <p id="dbg-raw" class="dbg-raw"></p>
+      <details id="dbg-details">
+        <summary>Full log</summary>
+        <pre id="dbg-log" class="dbg-log"></pre>
+      </details>
+      <p class="dbg-legend"><span class="said">✅ matched</span> <span class="ignored">❌ not matched → app expected</span> <span class="hint">💡 hint</span> <span class="skipped">⏭ jumped</span></p>
+    </div>
 
     <div class="speed" id="speed">
       <span class="speed-end" aria-hidden="true">🐢</span>
@@ -145,7 +164,7 @@
           <option value="ar-DZ">Algeria</option>
         </select>
       </label>
-      <label class="check"><input type="checkbox" id="set-heard"> Show what the app heard (for parents)</label>
+      <label class="check"><input type="checkbox" id="set-heard"> 🐞 Show what the app hears (debug panel)</label>
       <div class="row">
         <button type="button" class="btn ghost" id="btn-reset-settings">↺ Reset all to default</button>
         <button class="btn primary" value="ok">Done</button>
@@ -156,7 +175,7 @@
 
   <canvas id="confetti"></canvas>
 
-  <script src="matcher.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="matcher.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

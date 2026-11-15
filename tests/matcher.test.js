@@ -178,4 +178,27 @@ test('pace: words arriving in bursts are averaged per word', () => {
   assert.ok(Math.abs(p.secondsPerWord() - 0.4) < 1e-9);
 });
 
+test('explain reports what happened to each heard word', () => {
+  const tr = new M.Tracker(M.tokenize('Twinkle twinkle little star', 'en'));
+  const tr2 = tr.explain(['twinkle', 'banana', 'twinkle', 'star']);
+  assert.deepStrictEqual(tr2.map(x => [x.word, x.action, x.expected]), [
+    ['twinkle', 'said', 'Twinkle'], ['banana', 'ignored', 'twinkle'],
+    ['twinkle', 'said', 'twinkle'], ['star', 'skipped-to', 'star'],
+  ]);
+  assert.strictEqual(tr.pos, 0, 'explain must not change progress');
+});
+
+test('one misheard word does not derail the following short words', () => {
+  const tr = run(IKHLAS, 'ar', [['قل هو الله احد الله الصمد لن يلد ولم يولد', true]]);
+  assert.strictEqual(tr.pos, 10);
+  const tr2 = run(IKHLAS, 'ar', [['قل هو الله احد الله الصمد سيارة يلد ولم يولد', true]]);
+  assert.strictEqual(tr2.pos, 10);
+  assert.strictEqual(tr2.status[6], 'skipped');
+});
+
+test('english: misheard word then short words recover', () => {
+  const tr = run('up above the world so high', 'en', [['up a love the world so high', true]]);
+  assert.strictEqual(tr.pos, 6);
+});
+
 console.log(`\n${n} tests passed`);

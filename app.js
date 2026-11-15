@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const APP_VERSION = '6';
+  const APP_VERSION = '8';
   const $ = sel => document.querySelector(sel);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const isAndroid = /android/i.test(navigator.userAgent);
@@ -188,10 +188,14 @@
     $('#practice-title').dir = 'auto';
     wordsEl.dir = t.lang === 'ar' ? 'rtl' : 'ltr';
     wordsEl.lang = t.lang;
+    $('#dbg-words').dir = wordsEl.dir;
+    $('#dbg-raw').dir = wordsEl.dir;
     buildWords();
     syncSpeed();
     show('practice');
-    setHeard('');
+    D.spoken = []; D.raw = null;
+    dlog('— open “' + t.title + '” (' + P.tokens.length + ' words, ' + t.lang + ')');
+    setDebugVisible(settings.heard);
   }
 
   function buildWords() {
@@ -228,9 +232,101 @@
     if (tr.done) finish();
   }
 
-  function setHeard(text) {
-    $('#heard').textContent = settings.heard && text ? '👂 ' + text : '';
+  // ---------- Debug panel ----------
+  const D = { log: [], t0: Date.now(), lastRaw: '', seen: new Set(), session: 0, spoken: [], raw: null };
+  function dlog(msg) {
+    const t = ((Date.now() - D.t0) / 1000).toFixed(1).padStart(6);
+    D.log.push(t + '  ' + msg);
+    if (D.log.length > 800) D.log.splice(0, D.log.length - 800);
+    if (settings.heard) {
+      const pre = $('#dbg-log');
+      pre.textContent = D.log.slice(-80).join('\n');
+      pre.scrollTop = pre.scrollHeight;
+    }
   }
+  function setDebugVisible(on) {
+    settings.heard = on;
+    $('#debug').hidden = !on;
+    practiceEl.classList.toggle('debug-on', on);
+    $('#btn-debug').setAttribute('aria-pressed', String(on));
+    if (on) { $('#dbg-log').textContent = D.log.slice(-80).join('\n'); renderDebug(); }
+  }
+  function renderDebug() {
+    if (!settings.heard || !P.tracker) return;
+    const tr = P.tracker, tok = tr.tokens[tr.pos];
+    $('#dbg-status').textContent = [
+      P.listening ? '🎤 listening' : '⏸ mic off',
+      P.rec ? P.rec.lang : (P.text.lang === 'ar' ? settings.ar : settings.en),
+      'word ' + Math.min(tr.pos + 1, tr.tokens.length) + '/' + tr.tokens.length,
+      tok ? 'waiting for: “' + tok.display + '”' : 'finished',
+      'hint after ' + effectiveDelay().toFixed(1) + ' s',
+    ].join(' · ');
+    const trace = tr.explain(D.spoken);
+    const byIndex = new Map(trace.map(x => [x.i, x]));
+    const sym = { said: '✅', joined: '✅', split: '✅', easy: '✅', 'skipped-to': '⏭', 'hint-repeat': '💡', ignored: '❌' };
+    const cls = { said: 'said', joined: 'said', split: 'said', easy: 'said', 'skipped-to': 'skipped', 'hint-repeat': 'hint', ignored: 'ignored' };
+    const html = [];
+    for (let i = 0; i < D.spoken.length; i++) {
+      const x = byIndex.get(i);
+      if (!x) {
+        // second half of a joined word, or not looked at yet (text finished)
+        if (trace.some(y => y.action === 'joined' && y.i === i - 1)) continue;
+        html.push(`<span class="dbg-w pending">${esc(D.spoken[i])}<small>·</small></span>`);
+        continue;
+      }
+      const sub = x.action === 'ignored' ? '≠ ' + esc(x.expected || '') : '→ ' + esc(x.expected || '');
+      html.push(`<span class="dbg-w ${cls[x.action]}" dir="auto">${sym[x.action]} ${esc(x.word)}<small dir="auto">${sub}</small></span>`);
+    }
+    const box = $('#dbg-words');
+    box.innerHTML = html.join('') || '<span class="dbg-w pending">nothing heard yet in this session<small>speak, or tap 🎤</small></span>';
+    box.scrollTop = box.scrollHeight;
+    const r = D.raw;
+    $('#dbg-raw').innerHTML = r
+      ? `Recognizer ${r.final ? '<b>final</b>' : '<b>guessing</b>'}: “${esc(r.text)}”` +
+        (r.alts.length > 1 ? `<br>Other guesses: ${r.alts.slice(1).map(a => '“' + esc(a) + '”').join(', ')}` : '')
+      : 'Recognizer: nothing yet';
+  }
+  /** Log each heard word's outcome once (not on every interim update). */
+  function logDecisions() {
+    for (const x of P.tracker.explain(D.spoken)) {
+      const key = D.session + ':' + x.i + ':' + x.word + ':' + x.action;
+      if (D.seen.has(key)) continue;
+      D.seen.add(key);
+      if (x.action === 'ignored') dlog(`   ❌ "${x.word}" not matched; expected #${x.p + 1} "${x.expected}" (similarity ${x.sim}, sounds ${x.loose})`);
+      else dlog(`   ${x.action === 'skipped-to' ? '⏭' : x.action === 'hint-repeat' ? '💡' : '✅'} "${x.word}" → #${x.p + 1} "${x.expected}" (${x.action})`);
+    }
+  }
+  function logText() {
+    return [
+      'Learn by Heart debug log, version ' + APP_VERSION,
+      'Browser: ' + navigator.userAgent,
+      'Speech API: ' + (window.SpeechRecognition ? 'SpeechRecognition' : window.webkitSpeechRecognition ? 'webkitSpeechRecognition' : 'none'),
+      'Settings: ' + JSON.stringify(settings),
+      P.text ? 'Text: ' + P.text.title + ' [' + P.text.lang + ']\n' + P.text.text : '',
+      '',
+      ...D.log,
+    ].join('\n');
+  }
+  async function copyLog() {
+    const text = logText();
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      ta.remove();
+    }
+    const b = $('#dbg-copy'), old = b.textContent;
+    b.textContent = '✔ Copied'; setTimeout(() => { b.textContent = old; }, 1500);
+  }
+  $('#dbg-copy').addEventListener('click', copyLog);
+  if (navigator.share) {
+    $('#dbg-share').hidden = false;
+    $('#dbg-share').addEventListener('click', () => {
+      navigator.share({ title: 'Learn by Heart debug log', text: logText() }).catch(() => {});
+    });
+  }
+  $('#btn-debug').addEventListener('click', () => { setDebugVisible(!settings.heard); saveSettings(); });
 
   // --- speech recognition ---
   function toggleMic() {
@@ -245,6 +341,7 @@
     P.restartFails = 0;
     P.lastProgress = P.lastActivity = Date.now();
     P.pace.mark();
+    dlog('🎤 mic on (mode=' + settings.mode + ', follow pace=' + settings.follow + ', slider=' + settings.delay + ' s)');
     practiceEl.classList.add('listening');
     $('#mic-label').textContent = 'Listening…';
     $('#btn-mic').setAttribute('aria-label', 'Stop listening');
@@ -263,6 +360,13 @@
     rec.maxAlternatives = 3;
     P.tracker.newSession();
     P.lastSpokenLen = 0;
+    D.session++; D.spoken = []; D.lastRaw = '';
+    dlog(`mic session ${D.session}: lang=${rec.lang} continuous=${rec.continuous} at word #${P.tracker.pos + 1}`);
+    rec.onstart = () => dlog('  recognizer started');
+    rec.onaudiostart = () => dlog('  audio capture started');
+    rec.onspeechstart = () => dlog('  speech detected');
+    rec.onspeechend = () => dlog('  speech ended');
+    rec.onnomatch = () => dlog('  recognizer: no match');
 
     rec.onresult = e => {
       const lang = P.text.lang;
@@ -279,7 +383,23 @@
         if (pos > bestPos) { bestPos = pos; spoken = w; raw = alt; }
       }
       if (!spoken) return;
-      setHeard(earlier.concat(raw).join(' ').trim().split(/\s+/).slice(-12).join(' '));
+      const lastRes = res[last];
+      D.spoken = spoken;
+      D.raw = { text: earlier.concat(raw).join(' ').trim(), final: !!lastRes.isFinal,
+        alts: Array.from({ length: lastRes.length }, (_, a) => lastRes[a].transcript) };
+      // Log every phrase once when it becomes final, and the latest guess when it changes.
+      for (let i = 0; i <= last; i++) {
+        const r = res[i], txt = r[0].transcript.trim();
+        const others = r.length > 1 ? '  | other guesses: ' +
+          Array.from({ length: r.length - 1 }, (_, a) => '"' + r[a + 1].transcript.trim() + '"').join(', ') : '';
+        if (r.isFinal) {
+          const key = D.session + ':' + i + ':' + txt;
+          if (!D.seen.has(key)) { D.seen.add(key); dlog(`heard [final] "${txt}"${others}`); }
+        } else if (i === last && 'i' + txt !== D.lastRaw) {
+          D.lastRaw = 'i' + txt;
+          dlog(`heard [guess] "${txt}"${others}`);
+        }
+      }
       if (spoken.length !== P.lastSpokenLen) {
         P.lastActivity = Date.now();
         P.lastSpokenLen = spoken.length;
@@ -293,8 +413,11 @@
         P.lastProgress = Date.now();
         refresh();
       }
+      if (lastRes.isFinal || advanced > 0) logDecisions();
+      renderDebug();
     };
     rec.onerror = e => {
+      dlog('  ⚠️ error: ' + e.error + (e.message ? ' (' + e.message + ')' : ''));
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         stopListening();
         alert('Please allow the microphone so I can hear you. 🎤\n(Check the browser\'s site settings.)');
@@ -307,6 +430,7 @@
       // 'no-speech' and 'aborted' are normal — onend restarts.
     };
     rec.onend = () => {
+      dlog('  recognizer ended' + (P.listening && P.rec === rec ? ' → restarting' : ''));
       if (P.rec !== rec) return;
       if (!P.listening) return;
       if (P.restartFails > 5) {
@@ -317,10 +441,11 @@
       setTimeout(() => { if (P.listening && P.rec === rec) openRecognizer(); }, isAndroid ? 50 : 150);
     };
     P.rec = rec;
-    try { rec.start(); } catch { P.restartFails++; }
+    try { rec.start(); } catch (err) { P.restartFails++; dlog('  ⚠️ start failed: ' + err.message); }
   }
 
   function stopListening() {
+    if (P.listening) dlog('⏸ mic off');
     P.listening = false;
     clearInterval(P.timer);
     practiceEl.classList.remove('listening');
@@ -355,15 +480,18 @@
     if (!P.listening || !settings.auto || P.tracker.done) { if (cur) cur.style.removeProperty('--wait'); return; }
     syncSpeedLabel();
     const f = waitFraction(Date.now());
-    if (f >= 1) giveHint();
+    if (f >= 1) giveHint('pause');
     else if (cur) cur.style.setProperty('--wait', f.toFixed(3));
   }
 
-  function giveHint() {
+  function giveHint(source) {
     if (!P.tracker) return;
     const cur = P.spans[P.tracker.pos];
     if (cur) cur.style.removeProperty('--wait');
+    const why = source !== 'pause' ? '(' + (source || 'button') + ')' : `after ${((Date.now() - P.lastProgress) / 1000).toFixed(1)} s without progress (wait ${effectiveDelay().toFixed(1)} s)`;
+    const idx = P.tracker.pos;
     if (!P.tracker.hint()) return;
+    dlog(`💡 hint #${idx + 1} "${P.tokens[idx].display}" ${why}`);
     P.pace.mark();
     P.lastProgress = P.lastActivity = Date.now();
     refresh();
@@ -376,7 +504,9 @@
     P.finished = false;
     refresh(true);
     wordsEl.scrollTop = 0;
-    setHeard('');
+    D.spoken = []; D.raw = null;
+    dlog('— start over');
+    renderDebug();
   }
 
   function stopPractice() {
@@ -456,11 +586,11 @@
   peekBtn.addEventListener('contextmenu', e => e.preventDefault());
 
   $('#btn-mic').addEventListener('click', toggleMic);
-  $('#btn-hint').addEventListener('click', giveHint);
+  $('#btn-hint').addEventListener('click', () => giveHint('💡 button'));
   $('#btn-restart').addEventListener('click', () => { stopListening(); restart(); });
   wordsEl.addEventListener('click', e => {
     const s = e.target.closest('.w');
-    if (s && +s.dataset.i === P.tracker.pos) giveHint();
+    if (s && +s.dataset.i === P.tracker.pos) giveHint('tapped word');
   });
 
   // --- finish ---

@@ -31,11 +31,14 @@ The text is displayed with its diacritics, right to left.
 
 ## If words aren't being recognized
 
-1. In ⚙️ Settings, turn on **Show what the app heard**. A line under the text then shows what the
-   speech recognizer understood.
-   - If that line shows **the right words** but they don't light up, the app's matching is at
+1. Tap **🐞** on the practice screen to open the debug panel. It shows every word the speech
+   recognizer heard, and for each one whether the app matched it (✅, and to which word) or not
+   (❌, and which word it was expecting instead), plus the recognizer's raw text and other guesses.
+   **📋 Copy log** / **📤 Send log** gives a full log (mic start/stop, errors, restarts, hints and why)
+   to paste into a bug report.
+   - If the recognizer heard **the right words** but they show ❌, the app's matching is at
      fault. Please report the example.
-   - If it shows **wrong words**, the recognizer is mishearing. Try the steps below.
+   - If it heard **wrong words**, the recognizer is mishearing. Try the steps below.
 2. Check the **Arabic dialect / English accent** in Settings. For Qur'an and Fusha, *Saudi Arabia*
    usually works best.
 3. Set **How strict** to **Easy**. Every word your child says then reveals the next word, even

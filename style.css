@@ -225,7 +225,57 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(255, 138, 61, .35); } }
 
-.heard { min-height: 1.4em; margin: 0 0 8px; color: var(--muted); font-size: .95rem; text-align: center; }
+.topbar { grid-template-columns: 48px 1fr auto; }
+.topbar-right { display: flex; gap: 8px; }
+#btn-debug[aria-pressed="true"] { background: var(--primary); }
+
+/* ----- Debug panel ----- */
+.debug {
+  background: var(--card);
+  border: 2px dashed var(--muted);
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  font-size: .95rem;
+}
+.debug-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.debug-actions { display: flex; gap: 8px; }
+.dbg-status { margin: 6px 0; color: var(--muted); font-weight: 700; }
+.dbg-words { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; }
+.dbg-w {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  line-height: 1.25;
+  font-weight: 700;
+  background: var(--bg);
+}
+.dbg-w small { font-weight: 500; font-size: .75rem; opacity: .85; }
+.dbg-w.said, .dbg-legend .said { color: var(--said); }
+.dbg-w.ignored, .dbg-legend .ignored { color: var(--danger); }
+.dbg-w.hint, .dbg-legend .hint { color: var(--hint); }
+.dbg-w.skipped, .dbg-legend .skipped { color: var(--skipped); }
+.dbg-w.ignored { background: #ffe8e8; }
+.dbg-w.pending { color: var(--muted); font-style: italic; }
+.dbg-raw { margin: 6px 0 0; color: var(--muted); word-break: break-word; }
+.dbg-raw b { color: var(--ink); }
+.dbg-log {
+  max-height: 180px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 10px;
+  font-size: .75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.debug summary { cursor: pointer; color: var(--muted); font-weight: 700; margin-top: 6px; }
+.dbg-legend { margin: 6px 0 0; font-size: .78rem; display: flex; gap: 10px; flex-wrap: wrap; }
+.debug-on .words { max-height: calc(100dvh - 640px); min-height: 150px; }
+@media (prefers-color-scheme: dark) { .dbg-w.ignored { background: #4a2626; } }
 
 .speed {
   display: grid;

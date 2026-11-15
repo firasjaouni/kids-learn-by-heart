@@ -122,6 +122,7 @@
     if (a === b) return true;
     const len = Math.max(a.length, b.length);
     if (len <= 2) return loose && len === 2 && a[0] === b[0] && Math.min(a.length, b.length) === 2;
+    if (loose && len === 3 && Math.min(a.length, b.length) === 2) return a[0] === b[0] && levenshtein(a, b) === 1;
     const ratio = 1 - levenshtein(a, b) / len;
     const need = loose ? (len <= 4 ? 0.66 : 0.7) : (len <= 3 ? 0.66 : len <= 5 ? 0.75 : 0.7);
     return ratio >= need;
@@ -142,6 +143,8 @@
     if (level !== 'loose') return false;
     const la = looseKey(spoken), lb = looseKey(expected);
     if (la === lb) return true;
+    // two-letter words (لم / لن, is / it): same first letter, both short
+    if (spoken.length === 2 && expected.length === 2) return spoken[0] === expected[0];
     return Math.max(la.length, lb.length) >= 3 && ratioOk(la, lb, true);
   }
 
@@ -191,27 +194,54 @@
     /** How far would this transcript get us? (no changes made) */
     preview(spoken) { return this._align(spoken).pos; }
 
-    _align(spoken) {
+    /**
+     * For debugging: what happened to each heard word of this session.
+     * [{ i, word, action, p, expected }]  action: said | skipped-to | joined |
+     * split | hint-repeat | easy | ignored. For 'ignored', p/expected is the
+     * word the app was waiting for.
+     */
+    explain(spoken) {
+      const trace = [];
+      this._align(spoken, trace);
+      return trace;
+    }
+
+    _align(spoken, trace) {
       const t = this.tokens, marks = {};
+      const note = trace ? (i, action, p, extra) => trace.push(Object.assign(
+        { i, word: spoken[i], action, p, expected: t[p] ? t[p].display : null }, extra)) : null;
       let p = this.base, i = 0;
       while (i < spoken.length && p < t.length) {
         // Hints given during this session: the child may or may not repeat the word.
         if (p < this.pos && this.status[p] === 'hint') {
-          if (similar(spoken[i], t[p].norm, 'loose')) i++;
+          if (similar(spoken[i], t[p].norm, 'loose')) { if (note) note(i, 'hint-repeat', p); i++; }
           marks[p] = 'hint';
           p++;
           continue;
         }
         const m = this._matchAt(spoken, i, p);
         if (m) {
+          if (note) {
+            const action = m.skip ? 'skipped-to' : m.used === 2 ? 'joined' : m.tokens === 2 ? 'split' : 'said';
+            note(i, action, p + m.skip, m.used === 2 ? { word: spoken[i] + ' ' + spoken[i + 1] } : null);
+            if (m.tokens === 2) trace[trace.length - 1].expected += ' ' + t[p + 1].display;
+          }
           for (let k = 0; k < m.skip; k++) marks[p + k] = 'skipped';
           for (let k = 0; k < m.tokens; k++) marks[p + m.skip + k] = 'said';
           p += m.skip + m.tokens;
           i += m.used;
         } else if (this.mode === 'easy') {
+          if (note) note(i, 'easy', p);
           marks[p++] = 'said';
           i++;
         } else {
+          if (note) {
+            const a = spoken[i], b = t[p].norm, len = Math.max(a.length, b.length);
+            note(i, 'ignored', p, {
+              sim: Math.round((1 - levenshtein(a, b) / len) * 100) / 100,
+              loose: looseKey(a) + ' / ' + looseKey(b),
+            });
+          }
           i++; // a word that isn't in the text ("umm"), or misheard beyond repair
         }
       }
@@ -228,17 +258,17 @@
         return { skip: 0, tokens: 1, used: 2 };
       if (p + 1 < t.length && similar(w, t[p].norm + t[p + 1].norm, 'strict'))
         return { skip: 0, tokens: 2, used: 1 };
-      // Jumping ahead (recognizer dropped a word): strict, and only on longer words,
-      // to avoid false jumps on "a", "the", "و".
-      if (w.length < 4) return null;
+      // Jumping ahead (the recognizer misheard or dropped a word).
+      // Long words may jump on their own; short words ("يلد", "the") only when
+      // the next heard word ALSO matches the word after — two in a row.
+      const next = spoken[i + 1];
       for (let k = 1; k <= MAX_SKIP && p + k < t.length; k++) {
-        if (t[p + k].norm.length < 3) continue;
-        if (similar(w, t[p + k].norm, 'strict')) {
-          // a skip is only believable if the next spoken word fits what follows
-          const next = spoken[i + 1], after = t[p + k + 1];
-          if (next === undefined || !after || similar(next, after.norm, level) || w.length >= 5)
-            return { skip: k, tokens: 1, used: 1 };
-        }
+        if (!similar(w, t[p + k].norm, 'strict')) continue;
+        const after = t[p + k + 1];
+        const confirmed = next !== undefined && after && similar(next, after.norm, level);
+        if (confirmed && w.length >= 2) return { skip: k, tokens: 1, used: 1 };
+        if (w.length >= 4 && t[p + k].norm.length >= 3 && (next === undefined || !after || w.length >= 5))
+          return { skip: k, tokens: 1, used: 1 };
       }
       return null;
     }
