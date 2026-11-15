@@ -37,7 +37,7 @@
   const saveTexts = () => store.set('lbh.texts', texts);
 
   const settings = Object.assign(
-    { delay: 3, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false },
+    { delay: 3, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' },
     store.get('lbh.settings', {}));
   const saveSettings = () => store.set('lbh.settings', settings);
 
@@ -133,7 +133,7 @@
   });
 
   // ---------- Settings ----------
-  const setFields = { delay: '#set-delay', blanks: '#set-blanks', en: '#set-en', ar: '#set-ar' };
+  const setFields = { delay: '#set-delay', blanks: '#set-blanks', en: '#set-en', ar: '#set-ar', mode: '#set-mode' };
   $('#btn-settings').addEventListener('click', () => {
     for (const [k, sel] of Object.entries(setFields)) $(sel).value = String(settings[k]);
     $('#set-heard').checked = settings.heard;
@@ -145,6 +145,7 @@
     settings.en = $('#set-en').value;
     settings.ar = $('#set-ar').value;
     settings.heard = $('#set-heard').checked;
+    settings.mode = $('#set-mode').value;
     saveSettings();
   });
 
@@ -163,7 +164,7 @@
     if (!t) return;
     P.text = t;
     P.tokens = Matcher.tokenize(t.text, t.lang);
-    P.tracker = new Matcher.Tracker(P.tokens);
+    P.tracker = new Matcher.Tracker(P.tokens, { mode: settings.mode });
     P.finished = false;
     $('#practice-title').textContent = t.title;
     $('#practice-title').dir = 'auto';
@@ -239,26 +240,32 @@
     // Android Chrome repeats words in continuous mode; short sessions work better there.
     rec.continuous = !isAndroid;
     rec.interimResults = true;
-    rec.maxAlternatives = 1;
+    rec.maxAlternatives = 3;
     P.tracker.newSession();
     P.lastSpokenLen = 0;
 
     rec.onresult = e => {
-      const spoken = [];
-      let finalCount = 0, raw = '';
-      for (let i = 0; i < e.results.length; i++) {
-        const r = e.results[i];
-        raw += r[0].transcript + ' ';
-        spoken.push(...Matcher.words(r[0].transcript, P.text.lang));
-        if (r.isFinal) finalCount = spoken.length;
+      const lang = P.text.lang;
+      const res = e.results, last = res.length - 1;
+      const earlier = [];
+      for (let i = 0; i < last; i++) earlier.push(res[i][0].transcript);
+      // The recognizer may offer several guesses for the latest phrase:
+      // use the one that fits the text best.
+      let spoken = null, bestPos = -1, raw = '';
+      for (let a = 0; a < res[last].length; a++) {
+        const alt = res[last][a].transcript;
+        const w = Matcher.mergeResults(earlier.concat(alt), lang);
+        const pos = P.tracker.preview(w);
+        if (pos > bestPos) { bestPos = pos; spoken = w; raw = alt; }
       }
-      setHeard(raw.trim().split(/\s+/).slice(-12).join(' '));
+      if (!spoken) return;
+      setHeard(earlier.concat(raw).join(' ').trim().split(/\s+/).slice(-12).join(' '));
       if (spoken.length !== P.lastSpokenLen) {
         P.lastActivity = Date.now();
         P.lastSpokenLen = spoken.length;
       }
       P.restartFails = 0;
-      if (P.tracker.update(spoken, finalCount) > 0) {
+      if (P.tracker.update(spoken) > 0) {
         P.lastProgress = Date.now();
         refresh();
       }

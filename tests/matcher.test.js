@@ -29,11 +29,11 @@ test('tokenize keeps line breaks and glues punctuation', () => {
   assert.strictEqual(t[2].br, 1);
 });
 
-const run = (text, lang, chunks) => {
-  const tr = new M.Tracker(M.tokenize(text, lang));
+const run = (text, lang, chunks, mode) => {
+  const tr = new M.Tracker(M.tokenize(text, lang), { mode });
   for (const [said, final] of chunks) {
     const w = M.words(said, lang);
-    tr.update(w, final ? w.length : 0);
+    tr.update(w);
   }
   return tr;
 };
@@ -85,9 +85,63 @@ test('hint advances and new session restarts consumption', () => {
   tr.hint();
   assert.strictEqual(tr.status[1], 'hint');
   tr.newSession();
-  tr.update(['green', 'blue'], 2);
+  tr.update(['green', 'blue']);
   assert.strictEqual(tr.pos, 3);
   assert.deepStrictEqual(tr.score(), { said: 2, skipped: 0, hint: 1, hidden: 0 });
+});
+
+const IKHLAS = 'قُلْ هُوَ اللَّهُ أَحَدٌ\nاللَّهُ الصَّمَدُ\nلَمْ يَلِدْ وَلَمْ يُولَدْ\nوَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ';
+
+test('recognizer correcting an earlier guess is used', () => {
+  const tr = run(IKHLAS, 'ar', [['كل', false], ['كل هو', false], ['قل هو الله احد', false]]);
+  assert.strictEqual(tr.pos, 4);
+});
+
+test("children's / dialect pronunciation of the next word", () => {
+  const tr = run(IKHLAS, 'ar', [['ءل هو الله اهد الله السمد لم يلد ولم يولد ولم يكون له كفؤا احد', true]]);
+  assert.strictEqual(tr.pos, 15);
+});
+
+test('english homophones and sound-alikes', () => {
+  const tr = run('I have two hands and four fingers', 'en', [['eye have to hands and for fingers', true]]);
+  assert.strictEqual(tr.pos, 7);
+  const tr2 = run('Twinkle twinkle little star', 'en', [['twinkel twinkel littel stah', true]]);
+  assert.strictEqual(tr2.pos, 4);
+});
+
+test('reciting a different text does not advance (few false positives)', () => {
+  const fatiha = 'الحمد لله رب العالمين الرحمن الرحيم مالك يوم الدين اياك نعبد واياك نستعين';
+  const tr = run(IKHLAS, 'ar', [[fatiha, true]]);
+  assert.ok(tr.pos <= 1, 'advanced ' + tr.pos);
+  const tr2 = run('Twinkle twinkle little star how I wonder what you are', 'en',
+    [['the quick brown fox jumps over the lazy dog every single day', true]]);
+  assert.ok(tr2.pos <= 1, 'advanced ' + tr2.pos);
+});
+
+test('hint during a session: child repeating the hinted word is fine', () => {
+  const tr = new M.Tracker(M.tokenize('red green blue yellow', 'en'));
+  tr.update(['red']);
+  tr.hint();                                  // green shown
+  tr.update(['red', 'green', 'blue']);        // child repeats green, then blue
+  assert.strictEqual(tr.pos, 3);
+  assert.deepStrictEqual(tr.status, ['said', 'hint', 'said', 'hidden']);
+});
+
+test('easy mode reveals a word for every word spoken', () => {
+  const tr = run('one fish two fish', 'en', [['wun fizz blah fish', true]], 'easy');
+  assert.strictEqual(tr.pos, 4);
+});
+
+test('strict mode does not accept sound-alikes', () => {
+  const tr = run(IKHLAS, 'ar', [['ءل', true]], 'strict');
+  assert.strictEqual(tr.pos, 0);
+});
+
+test('safari-style cumulative results are not double counted', () => {
+  const w = M.mergeResults(['قل', 'قل هو', 'قل هو الله'], 'ar');
+  assert.deepStrictEqual(w, ['قل', 'هو', 'الله']);
+  const w2 = M.mergeResults(['twinkle twinkle', 'little star'], 'en');
+  assert.deepStrictEqual(w2, ['twinkle', 'twinkle', 'little', 'star']);
 });
 
 console.log(`\n${n} tests passed`);

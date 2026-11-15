@@ -86,23 +86,63 @@
 
   function stripArPrefix(w) {
     // leading conjunction "و" / "ف" is often split off or merged by recognizers
-    return w.length > 3 && (w[0] === '\u0648' || w[0] === '\u0641') ? w.slice(1) : w;
+    return w.length > 3 && (w[0] === 'و' || w[0] === 'ف') ? w.slice(1) : w;
   }
 
-  /** Are two normalized words "the same" (tolerant to recognizer errors)? */
-  function similar(spoken, expected) {
+  // Letters that children, dialects and recognizers commonly swap.
+  // (ق is said as ك, ء or g depending on the child / dialect.)
+  const AR_FOLD = { 'ث': 'س', 'ص': 'س', 'ذ': 'ز', 'ظ': 'ز', 'ض': 'د', 'ط': 'ت',
+    'ق': 'ا', 'ك': 'ا', 'ع': 'ا', 'ء': 'ا', 'ح': 'ه', 'غ': 'خ' };
+
+  /** A rough "sounds like" key, used only to accept the next expected word. */
+  function looseKey(w) {
+    if (AR_TEST.test(w)) {
+      let k = stripArPrefix(w).replace(/./g, c => AR_FOLD[c] || c);
+      k = k[0] + k.slice(1).replace(/[اوي]/g, ''); // long vowels are often heard differently
+      return k.replace(/(.)\1+/g, '$1');
+    }
+    let k = w.replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/c(?=[eiy])/g, 's')
+      .replace(/[cq]/g, 'k').replace(/x/g, 'ks').replace(/z/g, 's')
+      .replace(/^wh/, 'w').replace(/^kn/, 'n').replace(/^wr/, 'r').replace(/gh/g, '');
+    k = k[0] + k.slice(1).replace(/[aeiouyw]/g, '');
+    return k.replace(/(.)\1+/g, '$1');
+  }
+
+  const HOMOPHONES = [
+    ['two', 'to', 'too'], ['four', 'for', 'fore'], ['eight', 'ate'], ['one', 'won'],
+    ['you', 'u', 'ewe'], ['are', 'r'], ['be', 'bee'], ['see', 'sea', 'c'], ['know', 'no'],
+    ['right', 'write'], ['there', 'their', 'theyre'], ['high', 'hi'], ['by', 'buy', 'bye'],
+    ['son', 'sun'], ['i', 'eye'], ['knight', 'night'], ['hear', 'here'], ['dear', 'deer'],
+    ['flower', 'flour'], ['wood', 'would'], ['whole', 'hole'], ['our', 'hour'], ['new', 'knew'],
+  ];
+  const HOMO = new Map();
+  HOMOPHONES.forEach(g => g.forEach(w => HOMO.set(w, g[0])));
+
+  function ratioOk(a, b, loose) {
+    if (a === b) return true;
+    const len = Math.max(a.length, b.length);
+    if (len <= 2) return loose && len === 2 && a[0] === b[0] && Math.min(a.length, b.length) === 2;
+    const ratio = 1 - levenshtein(a, b) / len;
+    const need = loose ? (len <= 4 ? 0.66 : 0.7) : (len <= 3 ? 0.66 : len <= 5 ? 0.75 : 0.7);
+    return ratio >= need;
+  }
+
+  /**
+   * Are two normalized words "the same"?
+   * level 'strict': small recognizer typos only.
+   * level 'loose' : also sound-alikes and children's pronunciation.
+   */
+  function similar(spoken, expected, level) {
     if (!spoken || !expected) return false;
     if (spoken === expected) return true;
-    const pairs = [[spoken, expected], [stripArPrefix(spoken), stripArPrefix(expected)]];
-    for (const [a, b] of pairs) {
-      if (a === b) return true;
-      const len = Math.max(a.length, b.length);
-      if (len <= 2) continue;
-      const ratio = 1 - levenshtein(a, b) / len;
-      const need = len <= 3 ? 0.66 : len <= 5 ? 0.75 : 0.7;
-      if (ratio >= need) return true;
-    }
-    return false;
+    if (HOMO.has(spoken) && HOMO.get(spoken) === HOMO.get(expected)) return true;
+    if (ratioOk(spoken, expected, false)) return true;
+    const a = stripArPrefix(spoken), b = stripArPrefix(expected);
+    if (ratioOk(a, b, false)) return true;
+    if (level !== 'loose') return false;
+    const la = looseKey(spoken), lb = looseKey(expected);
+    if (la === lb) return true;
+    return Math.max(la.length, lb.length) >= 3 && ratioOk(la, lb, true);
   }
 
   const MAX_SKIP = 2;
@@ -110,61 +150,94 @@
   /**
    * Tracker keeps the child's position in the text.
    * status[i]: 'hidden' | 'said' | 'skipped' | 'hint'
+   *
+   * mode 'strict' : only near-exact words count.
+   *      'normal' : forgiving about pronunciation of the next word (default).
+   *      'easy'   : every word the child says reveals a word, even if misheard.
+   *
+   * Every update re-aligns the WHOLE transcript of the current recognition
+   * session from where the session started, so when the recognizer corrects
+   * an earlier guess ("كل" → "قل") the correction is used. Progress never
+   * goes backwards.
    */
   class Tracker {
-    constructor(tokens) {
+    constructor(tokens, opts) {
       this.tokens = tokens;
+      this.mode = (opts && opts.mode) || 'normal';
       this.reset();
     }
     reset() {
       this.pos = 0;
       this.status = this.tokens.map(() => 'hidden');
-      this.consumed = 0;
+      this.base = 0;
     }
     get done() { return this.pos >= this.tokens.length; }
 
     /** Call when a new recognition session starts (transcript restarts at 0). */
-    newSession() { this.consumed = 0; }
+    newSession() { this.base = this.pos; }
 
     /**
      * spoken: normalized words of the whole current recognition session.
-     * finalCount: how many leading words are final (won't be revised).
      * Returns number of tokens advanced.
      */
-    update(spoken, finalCount) {
-      if (spoken.length < this.consumed) this.consumed = spoken.length;
+    update(spoken) {
+      const { pos, marks } = this._align(spoken);
       const start = this.pos;
-      let i = this.consumed;
-      while (i < spoken.length && !this.done) {
-        const m = this._matchAt(spoken, i);
-        if (m) {
-          for (let k = 0; k < m.skip; k++) this.status[this.pos + k] = 'skipped';
-          for (let k = 0; k < m.tokens; k++) this.status[this.pos + m.skip + k] = 'said';
-          this.pos += m.skip + m.tokens;
-          i += m.used;
-          this.consumed = i;
-        } else {
-          // An unmatched word that is still interim and last may be a half-heard
-          // word ("beauti…") — keep it to re-check on the next update.
-          const revisable = i >= finalCount && i === spoken.length - 1;
-          i++;
-          if (!revisable) this.consumed = i;
-        }
-      }
+      for (let i = this.pos; i < pos; i++) this.status[i] = marks[i] || 'said';
+      if (pos > this.pos) this.pos = pos;
       return this.pos - start;
     }
 
-    _matchAt(spoken, i) {
-      const t = this.tokens, p = this.pos, w = spoken[i];
-      for (let k = 0; k <= MAX_SKIP && p + k < t.length; k++) {
-        // only skip ahead on longer words, to avoid false jumps on "a", "the", "و"
-        if (k > 0 && (w.length < 4 || t[p + k].norm.length < 3)) break;
-        if (similar(w, t[p + k].norm)) return { skip: k, tokens: 1, used: 1 };
-        if (k === 0) {
-          if (i + 1 < spoken.length && similar(w + spoken[i + 1], t[p].norm))
-            return { skip: 0, tokens: 1, used: 2 };
-          if (p + 1 < t.length && similar(w, t[p].norm + t[p + 1].norm))
-            return { skip: 0, tokens: 2, used: 1 };
+    /** How far would this transcript get us? (no changes made) */
+    preview(spoken) { return this._align(spoken).pos; }
+
+    _align(spoken) {
+      const t = this.tokens, marks = {};
+      let p = this.base, i = 0;
+      while (i < spoken.length && p < t.length) {
+        // Hints given during this session: the child may or may not repeat the word.
+        if (p < this.pos && this.status[p] === 'hint') {
+          if (similar(spoken[i], t[p].norm, 'loose')) i++;
+          marks[p] = 'hint';
+          p++;
+          continue;
+        }
+        const m = this._matchAt(spoken, i, p);
+        if (m) {
+          for (let k = 0; k < m.skip; k++) marks[p + k] = 'skipped';
+          for (let k = 0; k < m.tokens; k++) marks[p + m.skip + k] = 'said';
+          p += m.skip + m.tokens;
+          i += m.used;
+        } else if (this.mode === 'easy') {
+          marks[p++] = 'said';
+          i++;
+        } else {
+          i++; // a word that isn't in the text ("umm"), or misheard beyond repair
+        }
+      }
+      return { pos: p, marks };
+    }
+
+    _matchAt(spoken, i, p) {
+      const t = this.tokens, w = spoken[i];
+      const level = this.mode === 'strict' ? 'strict' : 'loose';
+      // The next expected word: forgiving.
+      if (similar(w, t[p].norm, level)) return { skip: 0, tokens: 1, used: 1 };
+      // Recognizer split one word in two, or joined two words into one.
+      if (i + 1 < spoken.length && similar(w + spoken[i + 1], t[p].norm, 'strict'))
+        return { skip: 0, tokens: 1, used: 2 };
+      if (p + 1 < t.length && similar(w, t[p].norm + t[p + 1].norm, 'strict'))
+        return { skip: 0, tokens: 2, used: 1 };
+      // Jumping ahead (recognizer dropped a word): strict, and only on longer words,
+      // to avoid false jumps on "a", "the", "و".
+      if (w.length < 4) return null;
+      for (let k = 1; k <= MAX_SKIP && p + k < t.length; k++) {
+        if (t[p + k].norm.length < 3) continue;
+        if (similar(w, t[p + k].norm, 'strict')) {
+          // a skip is only believable if the next spoken word fits what follows
+          const next = spoken[i + 1], after = t[p + k + 1];
+          if (next === undefined || !after || similar(next, after.norm, level) || w.length >= 5)
+            return { skip: k, tokens: 1, used: 1 };
         }
       }
       return null;
@@ -184,7 +257,23 @@
     }
   }
 
-  const api = { normalize, words, tokenize, detectLang, similar, levenshtein, Tracker };
+  /**
+   * Some browsers (notably Safari on iPhone/iPad) report each new result as the
+   * whole phrase so far ("قل", "قل هو", "قل هو الله"). Drop results that are just
+   * a prefix of the one after them, so words aren't counted twice.
+   */
+  function mergeResults(transcripts, lang) {
+    const lists = transcripts.map(t => words(t, lang));
+    const out = [];
+    lists.forEach((w, i) => {
+      const next = lists[i + 1];
+      const isPrefix = next && w.length && w.length <= next.length && w.every((x, j) => x === next[j]);
+      if (!isPrefix) out.push(...w);
+    });
+    return out;
+  }
+
+  const api = { normalize, words, tokenize, detectLang, similar, looseKey, levenshtein, Tracker, mergeResults };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Matcher = api;
 })(typeof window !== 'undefined' ? window : globalThis);
