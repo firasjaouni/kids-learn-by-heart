@@ -13,7 +13,9 @@ Other buttons:
 - 👀 **Peek**: tap to see the whole text for 2 seconds, or hold it down to keep it showing.
 - ↺ **Start over**.
 
-In ⚙️ Settings you can choose **how strict** listening is (Easy / Normal / Strict), change the pause length (or turn auto-hints off), how hidden words look
+Above the mic, a **🐢 ↔ 🐇 speed slider** sets how long the app waits (1–10 seconds) before showing the next word.
+
+In ⚙️ Settings you can choose **how strict** listening is (Easy / Normal / Strict), turn automatic hints off, how hidden words look
 (bars that show word length, dots, or nothing), the English accent and Arabic dialect used for
 listening, and turn on a line under the text showing what the app heard (useful for parents).
 

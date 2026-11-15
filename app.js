@@ -37,8 +37,9 @@
   const saveTexts = () => store.set('lbh.texts', texts);
 
   const settings = Object.assign(
-    { delay: 3, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' },
+    { delay: 3, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' },
     store.get('lbh.settings', {}));
+  if (!settings.delay) { settings.delay = 3; settings.auto = false; } // older "Never" setting
   const saveSettings = () => store.set('lbh.settings', settings);
 
   // ---------- Screens ----------
@@ -133,14 +134,15 @@
   });
 
   // ---------- Settings ----------
-  const setFields = { delay: '#set-delay', blanks: '#set-blanks', en: '#set-en', ar: '#set-ar', mode: '#set-mode' };
+  const setFields = { blanks: '#set-blanks', en: '#set-en', ar: '#set-ar', mode: '#set-mode' };
   $('#btn-settings').addEventListener('click', () => {
     for (const [k, sel] of Object.entries(setFields)) $(sel).value = String(settings[k]);
     $('#set-heard').checked = settings.heard;
+    $('#set-auto').checked = settings.auto;
     $('#settings').showModal();
   });
   $('#settings').addEventListener('close', () => {
-    settings.delay = +$('#set-delay').value;
+    settings.auto = $('#set-auto').checked;
     settings.blanks = $('#set-blanks').value;
     settings.en = $('#set-en').value;
     settings.ar = $('#set-ar').value;
@@ -171,6 +173,7 @@
     wordsEl.dir = t.lang === 'ar' ? 'rtl' : 'ltr';
     wordsEl.lang = t.lang;
     buildWords();
+    syncSpeed();
     show('practice');
     setHeard('');
   }
@@ -309,7 +312,7 @@
   }
 
   function checkPause() {
-    if (!P.listening || !settings.delay || P.tracker.done) return;
+    if (!P.listening || !settings.auto || P.tracker.done) return;
     const now = Date.now(), ms = settings.delay * 1000;
     const silent = now - P.lastActivity > ms;
     const stuck = now - P.lastProgress > ms * 2.5; // talking, but not the right words
@@ -335,6 +338,22 @@
     stopListening();
     stopPeek();
   }
+
+  // --- speed slider: 🐢 waits longer before a hint, 🐇 hints quickly ---
+  const slider = $('#speed-slider');
+  const SMIN = +slider.min, SMAX = +slider.max;
+  function syncSpeed() {
+    $('#speed').hidden = !settings.auto;
+    slider.value = SMIN + SMAX - settings.delay;
+    const d = settings.delay;
+    $('#speed-label').textContent = 'Next word after ' + (Number.isInteger(d) ? d : d.toFixed(1)) + ' s';
+  }
+  slider.addEventListener('input', () => {
+    settings.delay = SMIN + SMAX - +slider.value;
+    P.lastProgress = P.lastActivity = Date.now(); // don't fire a hint the moment it's moved
+    syncSpeed();
+  });
+  slider.addEventListener('change', saveSettings);
 
   // --- peek (hold to see the whole text) ---
   let peekTimer = null;
