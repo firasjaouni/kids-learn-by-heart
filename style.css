@@ -376,7 +376,18 @@ dialog {
 }
 dialog::backdrop { background: rgba(29, 26, 43, .5); backdrop-filter: blur(3px); }
 dialog h2 { margin: 0 0 12px; font-size: 1.7rem; }
-#result { text-align: center; }
+#result { text-align: center; position: relative; }
+.dialog-close {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  width: 40px; height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 1.1rem;
+}
+#result .result-extra { margin-top: 12px; gap: 8px; }
 #result .row { justify-content: center; margin-top: 16px; }
 .stars { font-size: 3.4rem; letter-spacing: 6px; }
 .stars .off { filter: grayscale(1); opacity: .3; }

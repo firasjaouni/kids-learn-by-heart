@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -117,12 +117,17 @@
 
   <!-- ========== RESULT ========== -->
   <dialog id="result">
+    <button type="button" class="dialog-close" id="btn-result-close" aria-label="Close and stay on this text">✕</button>
     <div class="stars" id="result-stars"></div>
     <h2 id="result-title">Well done!</h2>
     <p id="result-detail"></p>
     <div class="row">
       <button class="btn ghost" id="btn-result-home">🏠 Home</button>
       <button class="btn primary" id="btn-result-again">↺ Again</button>
+    </div>
+    <div class="row result-extra">
+      <button type="button" class="chip" id="btn-result-stay">✕ Stay here</button>
+      <button type="button" class="chip" id="btn-result-copy">📋 Copy debug log</button>
     </div>
   </dialog>
 
@@ -166,6 +171,7 @@
       </label>
       <label class="check"><input type="checkbox" id="set-heard"> 🐞 Show what the app hears (debug panel)</label>
       <div class="row">
+        <button type="button" class="btn ghost" id="btn-settings-copy">📋 Copy debug log</button>
         <button type="button" class="btn ghost" id="btn-reset-settings">↺ Reset all to default</button>
         <button class="btn primary" value="ok">Done</button>
       </div>
@@ -175,7 +181,7 @@
 
   <canvas id="confetti"></canvas>
 
-  <script src="matcher.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="matcher.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

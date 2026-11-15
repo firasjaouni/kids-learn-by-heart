@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const APP_VERSION = '8';
+  const APP_VERSION = '9';
   const $ = sel => document.querySelector(sel);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const isAndroid = /android/i.test(navigator.userAgent);
@@ -307,7 +307,7 @@
       ...D.log,
     ].join('\n');
   }
-  async function copyLog() {
+  async function copyLog(e) {
     const text = logText();
     try { await navigator.clipboard.writeText(text); }
     catch {
@@ -316,10 +316,12 @@
       try { document.execCommand('copy'); } catch { /* ignore */ }
       ta.remove();
     }
-    const b = $('#dbg-copy'), old = b.textContent;
+    const b = (e && e.currentTarget) || $('#dbg-copy'), old = b.textContent;
     b.textContent = '✔ Copied'; setTimeout(() => { b.textContent = old; }, 1500);
   }
   $('#dbg-copy').addEventListener('click', copyLog);
+  $('#btn-result-copy').addEventListener('click', copyLog);
+  $('#btn-settings-copy').addEventListener('click', copyLog);
   if (navigator.share) {
     $('#dbg-share').hidden = false;
     $('#dbg-share').addEventListener('click', () => {
@@ -610,12 +612,19 @@
     $('#result-detail').textContent = c.hint
       ? `You said ${own} of ${n} words by heart, with ${c.hint} hint${c.hint > 1 ? 's' : ''}.`
       : `You said all ${n} words by heart — no hints!`;
+    $('#btn-result-copy').hidden = !settings.heard;
+    dlog(`🏁 finished: ${own}/${n} by heart, ${c.hint} hints, ${c.skipped} jumped → ${stars} stars`);
+    renderDebug();
     setTimeout(() => {
       $('#result').showModal();
       if (stars >= 2) confetti();
     }, 500);
   }
   $('#btn-result-home').addEventListener('click', () => { $('#result').close(); goHome(); });
+  // Close the result and stay on the finished text (e.g. to read the debug panel)
+  const stay = () => $('#result').close();
+  $('#btn-result-close').addEventListener('click', stay);
+  $('#btn-result-stay').addEventListener('click', stay);
   $('#btn-result-again').addEventListener('click', () => { restart(); startListening(); });
 
   // --- keep the screen awake while reciting ---
