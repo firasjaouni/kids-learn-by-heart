@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -80,6 +80,7 @@
       <input type="range" id="speed-slider" min="1" max="10" step="0.5" aria-label="Hint speed: how long to wait before showing the next word">
       <span class="speed-end" aria-hidden="true">🐇</span>
       <div class="speed-info">
+        <button type="button" class="chip toggle" id="speed-follow" aria-pressed="true" title="Wait time adapts to how fast your child recites">🎵 Follow pace</button>
         <output id="speed-label" for="speed-slider"></output>
         <button type="button" class="chip" id="speed-reset" aria-label="Reset speed to default">↺ Default</button>
       </div>
@@ -155,7 +156,7 @@
 
   <canvas id="confetti"></canvas>
 
-  <script src="matcher.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="matcher.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

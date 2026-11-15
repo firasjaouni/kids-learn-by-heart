@@ -258,6 +258,49 @@
   }
 
   /**
+   * PaceMeter learns how fast the child recites, from the time between words
+   * they get right, and turns it into how long a pause should last before
+   * the next word is shown.
+   *   - Only gaps between two consecutive correct words are measured: the wait
+   *     at the start, or after a hint (reading time), is not their pace.
+   *   - Recognizers often deliver words in bursts (3 words after 1.2 s), so a
+   *     gap is divided by the number of words it brought.
+   */
+  class PaceMeter {
+    constructor() { this.reset(); }
+    reset() { this.samples = []; this.ref = null; }
+    /** Start of listening, or a hint: the next gap is not a pace sample. */
+    mark() { this.ref = null; }
+    progress(now, wordsAdvanced) {
+      if (this.ref !== null && wordsAdvanced > 0) {
+        const gap = now - this.ref;
+        if (gap < 6000) {
+          this.samples.push({ gap, words: wordsAdvanced });
+          if (this.samples.length > 10) this.samples.shift();
+        }
+      }
+      this.ref = now;
+    }
+    get words() { return this.samples.reduce((n, s) => n + s.words, 0); }
+    get ready() { return this.words >= 3; }
+    /** Average seconds per word over the recent window. */
+    secondsPerWord() {
+      if (!this.ready) return null;
+      return this.samples.reduce((t, s) => t + s.gap, 0) / this.words / 1000;
+    }
+    /**
+     * Seconds of silence before the next word is shown.
+     * patience: 1 = normal; >1 waits longer, <1 is quicker.
+     */
+    pauseDelay(patience) {
+      const spw = this.secondsPerWord();
+      if (spw === null) return null;
+      const base = Math.min(6, Math.max(1.2, spw * 2.5 + 0.5));
+      return Math.min(12, Math.max(0.8, base * (patience || 1)));
+    }
+  }
+
+  /**
    * Some browsers (notably Safari on iPhone/iPad) report each new result as the
    * whole phrase so far ("قل", "قل هو", "قل هو الله"). Drop results that are just
    * a prefix of the one after them, so words aren't counted twice.
@@ -273,7 +316,7 @@
     return out;
   }
 
-  const api = { normalize, words, tokenize, detectLang, similar, looseKey, levenshtein, Tracker, mergeResults };
+  const api = { normalize, words, tokenize, detectLang, similar, looseKey, levenshtein, Tracker, PaceMeter, mergeResults };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Matcher = api;
 })(typeof window !== 'undefined' ? window : globalThis);

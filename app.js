@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const APP_VERSION = '5';
+  const APP_VERSION = '6';
   const $ = sel => document.querySelector(sel);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const isAndroid = /android/i.test(navigator.userAgent);
@@ -37,7 +37,7 @@
   if (!texts) { texts = SAMPLES.slice(); store.set('lbh.texts', texts); }
   const saveTexts = () => store.set('lbh.texts', texts);
 
-  const DEFAULTS = { delay: 3, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' };
+  const DEFAULTS = { delay: 3, follow: true, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' };
   const settings = Object.assign({}, DEFAULTS, store.get('lbh.settings', {}));
   settings.delay = +settings.delay;
   if (!(settings.delay >= 1 && settings.delay <= 10)) { // older "Never" setting, or bad value
@@ -45,6 +45,7 @@
     settings.delay = DEFAULTS.delay;
   }
   settings.auto = settings.auto !== false;
+  settings.follow = settings.follow !== false;
   const saveSettings = () => store.set('lbh.settings', settings);
 
   // ---------- Screens ----------
@@ -170,7 +171,7 @@
     text: null, tokens: [], tracker: null, spans: [],
     listening: false, rec: null, timer: null,
     lastProgress: 0, lastActivity: 0, lastSpokenLen: 0,
-    wakeLock: null, restartFails: 0,
+    wakeLock: null, restartFails: 0, pace: new Matcher.PaceMeter(),
   };
   const wordsEl = $('#words');
   const practiceEl = $('#practice');
@@ -181,6 +182,7 @@
     P.text = t;
     P.tokens = Matcher.tokenize(t.text, t.lang);
     P.tracker = new Matcher.Tracker(P.tokens, { mode: settings.mode });
+    P.pace.reset();
     P.finished = false;
     $('#practice-title').textContent = t.title;
     $('#practice-title').dir = 'auto';
@@ -242,6 +244,7 @@
     P.listening = true;
     P.restartFails = 0;
     P.lastProgress = P.lastActivity = Date.now();
+    P.pace.mark();
     practiceEl.classList.add('listening');
     $('#mic-label').textContent = 'Listening…';
     $('#btn-mic').setAttribute('aria-label', 'Stop listening');
@@ -283,7 +286,9 @@
       }
       P.restartFails = 0;
       const before = P.spans[P.tracker.pos];
-      if (P.tracker.update(spoken) > 0) {
+      const advanced = P.tracker.update(spoken);
+      if (advanced > 0) {
+        P.pace.progress(Date.now(), advanced);
         if (before) before.style.removeProperty('--wait');
         P.lastProgress = Date.now();
         refresh();
@@ -327,9 +332,18 @@
     releaseWakeLock();
   }
 
+  /** Seconds of silence before a hint: follows the child's pace if enabled. */
+  function effectiveDelay() {
+    if (settings.follow) {
+      const d = P.pace.pauseDelay(settings.delay / DEFAULTS.delay); // slider = patience
+      if (d !== null) return d;
+    }
+    return settings.delay;
+  }
+
   /** 0..1: how close we are to showing the next word as a hint. */
   function waitFraction(now) {
-    const ms = settings.delay * 1000;
+    const ms = effectiveDelay() * 1000;
     const sinceProgress = now - P.lastProgress, sinceActivity = now - P.lastActivity;
     const silentPart = Math.min(sinceProgress, sinceActivity) / ms;
     const stuckPart = sinceProgress / (ms * 2); // talking, but not the right words
@@ -339,6 +353,7 @@
   function checkPause() {
     const cur = P.spans[P.tracker.pos];
     if (!P.listening || !settings.auto || P.tracker.done) { if (cur) cur.style.removeProperty('--wait'); return; }
+    syncSpeedLabel();
     const f = waitFraction(Date.now());
     if (f >= 1) giveHint();
     else if (cur) cur.style.setProperty('--wait', f.toFixed(3));
@@ -349,6 +364,7 @@
     const cur = P.spans[P.tracker.pos];
     if (cur) cur.style.removeProperty('--wait');
     if (!P.tracker.hint()) return;
+    P.pace.mark();
     P.lastProgress = P.lastActivity = Date.now();
     refresh();
   }
@@ -356,6 +372,7 @@
   function restart() {
     $('#result').open && $('#result').close();
     P.tracker.reset();
+    P.pace.reset();
     P.finished = false;
     refresh(true);
     wordsEl.scrollTop = 0;
@@ -370,12 +387,22 @@
   // --- speed slider: 🐢 waits longer before a hint, 🐇 hints quickly ---
   const slider = $('#speed-slider');
   const SMIN = +slider.min, SMAX = +slider.max;
+  const fmt = d => (Math.round(d * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  function syncSpeedLabel() {
+    let text;
+    if (!settings.follow) text = 'Next word after ' + fmt(settings.delay) + ' s';
+    else if (P.pace.ready) text = 'Next word after ~' + fmt(effectiveDelay()) + ' s · follows talking speed';
+    else text = 'Learning talking speed… (' + fmt(settings.delay) + ' s for now)';
+    const out = $('#speed-label');
+    if (out.textContent !== text) out.textContent = text;
+  }
   function syncSpeed() {
     $('#speed').hidden = !settings.auto;
-    $('#speed-reset').disabled = settings.delay === DEFAULTS.delay;
+    $('#speed').classList.toggle('follow', settings.follow);
+    $('#speed-follow').setAttribute('aria-pressed', String(settings.follow));
+    $('#speed-reset').disabled = settings.delay === DEFAULTS.delay && settings.follow === DEFAULTS.follow;
     slider.value = SMIN + SMAX - settings.delay;
-    const d = settings.delay;
-    $('#speed-label').textContent = 'Next word after ' + (Number.isInteger(d) ? d : d.toFixed(1)) + ' s';
+    syncSpeedLabel();
   }
   function setDelay(d) {
     settings.delay = Math.min(SMAX, Math.max(SMIN, Math.round(d * 2) / 2));
@@ -401,7 +428,13 @@
   const endDrag = () => { dragging = false; };
   slider.addEventListener('pointerup', endDrag);
   slider.addEventListener('pointercancel', endDrag);
-  $('#speed-reset').addEventListener('click', () => setDelay(DEFAULTS.delay));
+  $('#speed-reset').addEventListener('click', () => { settings.follow = DEFAULTS.follow; setDelay(DEFAULTS.delay); });
+  $('#speed-follow').addEventListener('click', () => {
+    settings.follow = !settings.follow;
+    P.lastProgress = P.lastActivity = Date.now();
+    syncSpeed();
+    saveSettings();
+  });
 
   // --- peek (hold to see the whole text) ---
   let peekTimer = null;

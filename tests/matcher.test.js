@@ -144,4 +144,38 @@ test('safari-style cumulative results are not double counted', () => {
   assert.deepStrictEqual(w2, ['twinkle', 'twinkle', 'little', 'star']);
 });
 
+test('pace: fast reciter gets short pauses, slow reciter gets longer ones', () => {
+  const fast = new M.PaceMeter(), slow = new M.PaceMeter();
+  let t = 0;
+  fast.mark(); for (let i = 0; i < 8; i++) fast.progress(t += 400, 1);
+  t = 0;
+  slow.mark(); for (let i = 0; i < 8; i++) slow.progress(t += 1500, 1);
+  assert.ok(Math.abs(fast.secondsPerWord() - 0.4) < 1e-9);
+  assert.strictEqual(fast.pauseDelay(1), 1.5);
+  assert.strictEqual(slow.pauseDelay(1), 4.25);
+  assert.ok(slow.pauseDelay(2) > slow.pauseDelay(1) && fast.pauseDelay(0.5) < fast.pauseDelay(1));
+});
+
+test('pace: not ready until a few words; start/hint waits and long pauses not counted', () => {
+  const p = new M.PaceMeter();
+  p.mark();
+  p.progress(3000, 1);               // first word after a 3 s start: not a sample
+  assert.strictEqual(p.pauseDelay(1), null);
+  p.progress(3500, 1); p.progress(4000, 1);
+  assert.strictEqual(p.ready, false);
+  p.mark();                          // hint shown
+  p.progress(9000, 1);               // reading the hint: not a sample
+  p.progress(9500, 1);
+  assert.strictEqual(p.ready, true);
+  assert.ok(Math.abs(p.secondsPerWord() - 0.5) < 1e-9);
+  p.progress(20000, 1);              // 10 s pause: ignored
+  assert.ok(Math.abs(p.secondsPerWord() - 0.5) < 1e-9);
+});
+
+test('pace: words arriving in bursts are averaged per word', () => {
+  const p = new M.PaceMeter();
+  p.mark(); p.progress(0, 1); p.progress(1200, 3); p.progress(2400, 3);
+  assert.ok(Math.abs(p.secondsPerWord() - 0.4) < 1e-9);
+});
+
 console.log(`\n${n} tests passed`);

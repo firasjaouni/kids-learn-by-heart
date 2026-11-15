@@ -13,7 +13,11 @@ Other buttons:
 - 👀 **Peek**: tap to see the whole text for 2 seconds, or hold it down to keep it showing.
 - ↺ **Start over**.
 
-Above the mic, a **🐢 ↔ 🐇 speed slider** sets how long the app waits (1–10 seconds) before showing the next word.
+Above the mic, a **🐢 ↔ 🐇 speed slider** sets how long the app waits before showing the next word.
+With **🎵 Follow pace** on (the default), the wait adapts to how fast your child recites: a quick
+reciter gets a hint after a short pause, a slow one gets more time. The slider then sets patience
+on top of that (🐢 more, 🐇 less). With Follow pace off, the slider is a fixed 1–10 seconds.
+**↺ Default** puts both back.
 
 In ⚙️ Settings you can choose **how strict** listening is (Easy / Normal / Strict), turn automatic hints off, how hidden words look
 (bars that show word length, dots, or nothing), the English accent and Arabic dialect used for

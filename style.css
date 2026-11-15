@@ -248,6 +248,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
   font-weight: 700;
   font-size: .9rem;
 }
+.chip.toggle[aria-pressed="true"] { background: var(--primary); color: #fff; }
+.speed-info { flex-wrap: wrap; }
 .chip:disabled { opacity: .4; box-shadow: none; cursor: default; }
 .version { margin: 0; text-align: center; color: var(--muted); font-size: .85rem; }
 .speed input[type="range"] {
