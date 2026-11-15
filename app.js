@@ -2,6 +2,7 @@
 (function () {
   'use strict';
 
+  const APP_VERSION = '5';
   const $ = sel => document.querySelector(sel);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const isAndroid = /android/i.test(navigator.userAgent);
@@ -36,10 +37,14 @@
   if (!texts) { texts = SAMPLES.slice(); store.set('lbh.texts', texts); }
   const saveTexts = () => store.set('lbh.texts', texts);
 
-  const settings = Object.assign(
-    { delay: 3, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' },
-    store.get('lbh.settings', {}));
-  if (!settings.delay) { settings.delay = 3; settings.auto = false; } // older "Never" setting
+  const DEFAULTS = { delay: 3, auto: true, blanks: 'shape', en: 'en-US', ar: 'ar-SA', heard: false, mode: 'normal' };
+  const settings = Object.assign({}, DEFAULTS, store.get('lbh.settings', {}));
+  settings.delay = +settings.delay;
+  if (!(settings.delay >= 1 && settings.delay <= 10)) { // older "Never" setting, or bad value
+    if (settings.delay === 0) settings.auto = false;
+    settings.delay = DEFAULTS.delay;
+  }
+  settings.auto = settings.auto !== false;
   const saveSettings = () => store.set('lbh.settings', settings);
 
   // ---------- Screens ----------
@@ -139,6 +144,7 @@
     for (const [k, sel] of Object.entries(setFields)) $(sel).value = String(settings[k]);
     $('#set-heard').checked = settings.heard;
     $('#set-auto').checked = settings.auto;
+    $('#app-version').textContent = 'Version ' + APP_VERSION;
     $('#settings').showModal();
   });
   $('#settings').addEventListener('close', () => {
@@ -148,6 +154,14 @@
     settings.ar = $('#set-ar').value;
     settings.heard = $('#set-heard').checked;
     settings.mode = $('#set-mode').value;
+    saveSettings();
+  });
+
+  $('#btn-reset-settings').addEventListener('click', () => {
+    Object.assign(settings, DEFAULTS);
+    for (const [k, sel] of Object.entries(setFields)) $(sel).value = String(settings[k]);
+    $('#set-heard').checked = settings.heard;
+    $('#set-auto').checked = settings.auto;
     saveSettings();
   });
 
@@ -268,7 +282,9 @@
         P.lastSpokenLen = spoken.length;
       }
       P.restartFails = 0;
+      const before = P.spans[P.tracker.pos];
       if (P.tracker.update(spoken) > 0) {
+        if (before) before.style.removeProperty('--wait');
         P.lastProgress = Date.now();
         refresh();
       }
@@ -311,16 +327,28 @@
     releaseWakeLock();
   }
 
+  /** 0..1: how close we are to showing the next word as a hint. */
+  function waitFraction(now) {
+    const ms = settings.delay * 1000;
+    const sinceProgress = now - P.lastProgress, sinceActivity = now - P.lastActivity;
+    const silentPart = Math.min(sinceProgress, sinceActivity) / ms;
+    const stuckPart = sinceProgress / (ms * 2); // talking, but not the right words
+    return Math.min(1, Math.max(silentPart, stuckPart));
+  }
+
   function checkPause() {
-    if (!P.listening || !settings.auto || P.tracker.done) return;
-    const now = Date.now(), ms = settings.delay * 1000;
-    const silent = now - P.lastActivity > ms;
-    const stuck = now - P.lastProgress > ms * 2.5; // talking, but not the right words
-    if (now - P.lastProgress > ms && (silent || stuck)) giveHint();
+    const cur = P.spans[P.tracker.pos];
+    if (!P.listening || !settings.auto || P.tracker.done) { if (cur) cur.style.removeProperty('--wait'); return; }
+    const f = waitFraction(Date.now());
+    if (f >= 1) giveHint();
+    else if (cur) cur.style.setProperty('--wait', f.toFixed(3));
   }
 
   function giveHint() {
-    if (!P.tracker || !P.tracker.hint()) return;
+    if (!P.tracker) return;
+    const cur = P.spans[P.tracker.pos];
+    if (cur) cur.style.removeProperty('--wait');
+    if (!P.tracker.hint()) return;
     P.lastProgress = P.lastActivity = Date.now();
     refresh();
   }
@@ -344,16 +372,36 @@
   const SMIN = +slider.min, SMAX = +slider.max;
   function syncSpeed() {
     $('#speed').hidden = !settings.auto;
+    $('#speed-reset').disabled = settings.delay === DEFAULTS.delay;
     slider.value = SMIN + SMAX - settings.delay;
     const d = settings.delay;
     $('#speed-label').textContent = 'Next word after ' + (Number.isInteger(d) ? d : d.toFixed(1)) + ' s';
   }
-  slider.addEventListener('input', () => {
-    settings.delay = SMIN + SMAX - +slider.value;
-    P.lastProgress = P.lastActivity = Date.now(); // don't fire a hint the moment it's moved
+  function setDelay(d) {
+    settings.delay = Math.min(SMAX, Math.max(SMIN, Math.round(d * 2) / 2));
+    P.lastProgress = P.lastActivity = Date.now(); // restart the pause timer
     syncSpeed();
+    saveSettings();
+  }
+  slider.addEventListener('input', () => setDelay(SMIN + SMAX - +slider.value));
+  // Make the whole track tappable/draggable with a finger.
+  let dragging = false;
+  const fromPointer = e => {
+    const r = slider.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    setDelay(SMAX - f * (SMAX - SMIN));
+  };
+  slider.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    dragging = true;
+    try { slider.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    fromPointer(e);
   });
-  slider.addEventListener('change', saveSettings);
+  slider.addEventListener('pointermove', e => { if (dragging) fromPointer(e); });
+  const endDrag = () => { dragging = false; };
+  slider.addEventListener('pointerup', endDrag);
+  slider.addEventListener('pointercancel', endDrag);
+  $('#speed-reset').addEventListener('click', () => setDelay(DEFAULTS.delay));
 
   // --- peek (hold to see the whole text) ---
   let peekTimer = null;

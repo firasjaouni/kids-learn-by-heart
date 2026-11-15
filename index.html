@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -79,7 +79,10 @@
       <span class="speed-end" aria-hidden="true">🐢</span>
       <input type="range" id="speed-slider" min="1" max="10" step="0.5" aria-label="Hint speed: how long to wait before showing the next word">
       <span class="speed-end" aria-hidden="true">🐇</span>
-      <output id="speed-label" for="speed-slider"></output>
+      <div class="speed-info">
+        <output id="speed-label" for="speed-slider"></output>
+        <button type="button" class="chip" id="speed-reset" aria-label="Reset speed to default">↺ Default</button>
+      </div>
     </div>
 
     <footer class="controls">
@@ -142,13 +145,17 @@
         </select>
       </label>
       <label class="check"><input type="checkbox" id="set-heard"> Show what the app heard (for parents)</label>
-      <div class="row"><button class="btn primary" value="ok">Done</button></div>
+      <div class="row">
+        <button type="button" class="btn ghost" id="btn-reset-settings">↺ Reset all to default</button>
+        <button class="btn primary" value="ok">Done</button>
+      </div>
+      <p class="version" id="app-version"></p>
     </form>
   </dialog>
 
   <canvas id="confetti"></canvas>
 
-  <script src="matcher.js"></script>
-  <script src="app.js"></script>
+  <script src="matcher.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

@@ -205,6 +205,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
 .w.skipped { color: var(--skipped); animation: pop .35s ease; }
 .w.hint { color: var(--hint); background: var(--hint-bg); animation: pop .35s ease; }
 .w.current { box-shadow: 0 0 0 3px var(--primary); }
+/* "hint coming" bar: fills up under the current word during a pause */
+.w.current::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 4px;
+  bottom: 4px;
+  height: 7px;
+  width: calc((100% - 8px) * var(--wait, 0));
+  background: var(--primary);
+  border-radius: 99px;
+  transition: width .2s linear;
+}
 .listening .w.current { animation: pulse 1.2s ease-in-out infinite; }
 .peeking .w.hidden { color: var(--muted); background: transparent; }
 .blanks-none.peeking .w.hidden { display: inline-block; }
@@ -225,16 +237,29 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--p
   margin: 0 auto 14px;
 }
 .speed-end { font-size: 1.7rem; line-height: 1; }
-.speed output { grid-column: 1 / -1; text-align: center; color: var(--muted); font-weight: 700; font-size: .95rem; margin-top: -4px; }
+.speed-info { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: -2px; }
+.speed output { color: var(--muted); font-weight: 700; font-size: .95rem; }
+.chip {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  font-size: .9rem;
+}
+.chip:disabled { opacity: .4; box-shadow: none; cursor: default; }
+.version { margin: 0; text-align: center; color: var(--muted); font-size: .85rem; }
 .speed input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 14px;
-  padding: 0;
   border: 0;
   border-radius: 99px;
   background: linear-gradient(90deg, #8fd3a7, #ffc94d, var(--primary));
-  touch-action: manipulation;
+  touch-action: none;
+  height: 44px;               /* big finger target; the visible track is drawn below */
+  background-clip: content-box;
+  padding: 15px 0;
 }
 .speed input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
